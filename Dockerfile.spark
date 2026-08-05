@@ -1,0 +1,26 @@
+FROM python:3.9-bullseye
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+
+# Instala o Java de forma nativa e limpa o cache do gerenciador de pacotes
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends openjdk-11-jre-headless && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN addgroup --system sparkgroup && adduser --system --ingroup sparkgroup sparkuser
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+# Garantindo permissoes restritas
+RUN chown -R sparkuser:sparkgroup /app
+USER sparkuser
+
+CMD ["python", "processing/spark_streaming.py"]
