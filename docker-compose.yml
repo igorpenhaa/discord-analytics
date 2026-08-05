@@ -1,0 +1,130 @@
+version: '3.8'
+
+# 1. Declaração de Volumes Persistentes (Stateful)
+volumes:
+  zookeeper_data:
+    driver: local
+  kafka_data:
+    driver: local
+  elastic_data:
+    driver: local
+
+services:
+  # --- INFRAESTRUTURA BASE ---
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 7
+    ports:
+      - "9092:9092"
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.10.2
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - elastic_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200 >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "9200:9200"
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.10.2
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    ports:
+      - "5601:5601"
+
+  # --- APLICAÇÕES PYTHON ---
+  discord-producer:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    command: ["python", "producer/discord_bot.py"]
+    env_file: .env
+    restart: on-failure
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - PYTHONPATH=/app
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  spark-processor:
+    build:
+      context: .
+      dockerfile: Dockerfile.spark
+    env_file: .env
+    restart: on-failure
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - PYTHONPATH=/app
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  elastic-consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    command: ["python", "consumer/elastic_bridge.py"]
+    env_file: .env
+    restart: on-failure
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - PYTHONPATH=/app
+    depends_on:
+      kafka:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+
+  kibana-setup:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    command: ["python", "dashboards/setup_kibana.py"]
+    env_file: .env
+    restart: on-failure
+    environment:
+      - KIBANA_URL=http://kibana:5601
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - PYTHONPATH=/app
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
