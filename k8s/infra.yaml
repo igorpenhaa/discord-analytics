@@ -1,0 +1,187 @@
+# --- ZOOKEEPER (Dependencia do Confluent Kafka) ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper-service
+  namespace: discord
+spec:
+  ports:
+  - port: 2181
+    name: client
+  clusterIP: None # Headless service para StatefulSet
+  selector:
+    app: zookeeper
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zookeeper
+  namespace: discord
+spec:
+  serviceName: zookeeper-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zookeeper
+  template:
+    metadata:
+      labels:
+        app: zookeeper
+    spec:
+      containers:
+      - name: zookeeper
+        image: confluentinc/cp-zookeeper:7.5.0
+        env:
+        - name: ZOOKEEPER_CLIENT_PORT
+          value: "2181"
+        - name: ZOOKEEPER_TICK_TIME
+          value: "2000"
+
+---
+# --- KAFKA (Confluent Oficial) ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-service
+  namespace: discord
+spec:
+  ports:
+  - port: 9092
+    name: client
+  clusterIP: None
+  selector:
+    app: kafka
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  namespace: discord
+spec:
+  serviceName: kafka-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      containers:
+      - name: kafka
+        image: confluentinc/cp-kafka:7.5.0
+        env:
+        - name: KAFKA_BROKER_ID
+          value: "1"
+        - name: KAFKA_ZOOKEEPER_CONNECT
+          value: "zookeeper-service:2181"
+        - name: KAFKA_ADVERTISED_LISTENERS
+          value: PLAINTEXT://kafka-service:9092
+        - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+          value: "1"
+        - name: KAFKA_HEAP_OPTS
+          value: "-Xmx512m -Xms512m"
+        volumeMounts:
+        - name: kafka-data
+          mountPath: /var/lib/kafka/data
+  # Persistencia de Disco Real na Nuvem
+  volumeClaimTemplates:
+  - metadata:
+      name: kafka-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 5Gi
+
+---
+# --- ELASTICSEARCH (Stateful) ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-service
+  namespace: discord
+spec:
+  ports:
+  - port: 9200
+    name: http
+  clusterIP: None
+  selector:
+    app: elasticsearch
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: elasticsearch
+  namespace: discord
+spec:
+  serviceName: elasticsearch-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elasticsearch
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+    spec:
+      containers:
+      - name: elasticsearch
+        image: docker.elastic.co/elasticsearch/elasticsearch:7.10.2
+        env:
+        - name: discovery.type
+          value: "single-node"
+        - name: ES_JAVA_OPTS
+          value: "-Xms512m -Xmx512m"
+        volumeMounts:
+        - name: elastic-data
+          mountPath: /usr/share/elasticsearch/data
+  volumeClaimTemplates:
+  - metadata:
+      name: elastic-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 5Gi
+
+---
+# --- KIBANA ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kibana-service
+  namespace: discord
+spec:
+  type: NodePort
+  ports:
+  - port: 5601
+    targetPort: 5601
+    nodePort: 30000 # Porta fixa para facilitar o acesso externo no servidor
+  selector:
+    app: kibana
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kibana
+  namespace: discord
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kibana
+  template:
+    metadata:
+      labels:
+        app: kibana
+    spec:
+      containers:
+      - name: kibana
+        image: docker.elastic.co/kibana/kibana:7.10.2
+        env:
+        - name: ELASTICSEARCH_HOSTS
+          value: "http://elasticsearch-service:9200"
+

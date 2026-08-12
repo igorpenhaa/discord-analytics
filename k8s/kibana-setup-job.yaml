@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kibana-setup-script
+  namespace: discord
+data:
+  setup.sh: |
+    #!/bin/sh
+    echo "Aguardando Elasticsearch iniciar na porta 9200..."
+    while ! curl -s http://elasticsearch-service:9200 > /dev/null; do sleep 5; done
+
+    echo "Criando o esqueleto do banco de dados (Index Mapping) limpo..."
+    curl -s -X PUT "http://elasticsearch-service:9200/palavras-discord" \
+      -H 'Content-Type: application/json' \
+      -d '{
+            "mappings": {
+              "properties": {
+                "palavra": {
+                  "type": "text",
+                  "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } }
+                },
+                "count": { "type": "long" }
+              }
+            }
+          }'
+
+    echo "Aguardando Kibana iniciar na porta 5601..."
+    while ! curl -s http://kibana-service:5601/api/status | grep -q "status"; do sleep 5; done
+    
+    echo "Kibana online! Criando Index Pattern..."
+    curl -s -X POST "http://kibana-service:5601/api/saved_objects/index-pattern/palavras-discord-pattern" \
+      -H 'kbn-xsrf: true' -H 'Content-Type: application/json' \
+      -d '{"attributes":{"title":"palavras-discord*","timeFieldName":null}}'
+      
+    echo -e "\nCriando Visualização (Nuvem de Palavras)..."
+    curl -s -X POST "http://kibana-service:5601/api/saved_objects/visualization/palavras-discord-cloud" \
+      -H 'kbn-xsrf: true' -H 'Content-Type: application/json' \
+      -d '{"attributes":{"title":"Nuvem de Palavras Discord","visState":"{\"title\":\"Nuvem de Palavras Discord\",\"type\":\"tagcloud\",\"params\":{\"scale\":\"linear\",\"orientation\":\"single\",\"minFontSize\":18,\"maxFontSize\":72,\"showLabel\":true},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"sum\",\"schema\":\"metric\",\"params\":{\"field\":\"count\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"segment\",\"params\":{\"field\":\"palavra.keyword\",\"size\":50,\"order\":\"desc\",\"orderBy\":\"1\"}}]}","uiStateJSON":"{}","description":"","version":1,"kibanaSavedObjectMeta":{"searchSourceJSON":"{\"query\":{\"query\":\"\",\"language\":\"kuery\"},\"filter\":[],\"indexRefName\":\"kibanaSavedObjectMeta.searchSourceJSON.index\"}"}},"references":[{"name":"kibanaSavedObjectMeta.searchSourceJSON.index","type":"index-pattern","id":"palavras-discord-pattern"}]}'
+    
+    echo -e "\nCriando Dashboard..."
+    curl -s -X POST "http://kibana-service:5601/api/saved_objects/dashboard/palavras-discord-dashboard" \
+      -H 'kbn-xsrf: true' -H 'Content-Type: application/json' \
+      -d '{"attributes":{"title":"Dashboard Discord - Tempo Real","hits":0,"description":"","panelsJSON":"[{\"version\":\"7.0.0\",\"type\":\"visualization\",\"gridData\":{\"x\":0,\"y\":0,\"w\":48,\"h\":25,\"i\":\"1\"},\"panelIndex\":\"1\",\"embeddableConfig\":{},\"panelRefName\":\"panel_0\"}]","optionsJSON":"{\"useMargins\":true,\"hidePanelTitles\":false}","version":1,"timeRestore":false,"kibanaSavedObjectMeta":{"searchSourceJSON":"{\"query\":{\"query\":\"\",\"language\":\"kuery\"},\"filter\":[]}"}},"references":[{"name":"panel_0","type":"visualization","id":"palavras-discord-cloud"}]}'
+    
+    echo -e "\nSetup automatizado concluído!"
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kibana-setup-job
+  namespace: discord
+spec:
+  template:
+    spec:
+      containers:
+      - name: kibana-setup
+        image: curlimages/curl:latest
+        command: ["/bin/sh", "/setup/setup.sh"]
+        volumeMounts:
+        - name: setup-script
+          mountPath: /setup
+      volumes:
+      - name: setup-script
+        configMap:
+          name: kibana-setup-script
+          defaultMode: 0777
+      restartPolicy: OnFailure

@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pipeline-config
+  namespace: discord
+data:
+  KAFKA_BOOTSTRAP_SERVERS: "kafka-service:9092"
+  KAFKA_TOPIC_IN: "topico-entrada"
+  KAFKA_TOPIC_OUT: "topico-saida"
+  ELASTICSEARCH_URL: "http://elasticsearch-service:9200"
+  ELASTICSEARCH_INDEX: "palavras-discord"
+  KIBANA_URL: "http://kibana-service:5601"

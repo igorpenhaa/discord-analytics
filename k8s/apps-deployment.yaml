@@ -1,0 +1,105 @@
+# --- DISCORD PRODUCER ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: discord-producer
+  namespace: discord
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: discord-producer
+  template:
+    metadata:
+      labels:
+        app: discord-producer
+    spec:
+      containers:
+      - name: producer
+        # Em CI/CD real, a tag NUNCA eh latest. A esteira Jenkins substituira
+		# isso por uma versao (ex: v1.0.3)
+        image: seu_usuario_dockerhub/discord-producer:v1.0.0 
+        imagePullPolicy: IfNotPresent
+        command: ["python", "producer/discord_bot.py"]
+        envFrom:
+        - configMapRef:
+            name: pipeline-config
+        env:
+        - name: DISCORD_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: discord-secret
+              key: DISCORD_TOKEN
+        # Blindagem de Recursos
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "250m"
+
+---
+# --- SPARK PROCESSOR ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-processor
+  namespace: discord
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spark-processor
+  template:
+    metadata:
+      labels:
+        app: spark-processor
+    spec:
+      containers:
+      - name: processor
+        image: seu_usuario_dockerhub/spark-processor:v1.0.0
+        imagePullPolicy: IfNotPresent
+        envFrom:
+        - configMapRef:
+            name: pipeline-config
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+
+---
+# --- ELASTIC CONSUMER ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elastic-consumer
+  namespace: discord
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elastic-consumer
+  template:
+    metadata:
+      labels:
+        app: elastic-consumer
+    spec:
+      containers:
+      - name: consumer
+        image: seu_usuario_dockerhub/elastic-consumer:v1.0.0
+        imagePullPolicy: IfNotPresent
+        command: ["python", "consumer/elastic_bridge.py"]
+        envFrom:
+        - configMapRef:
+            name: pipeline-config
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
