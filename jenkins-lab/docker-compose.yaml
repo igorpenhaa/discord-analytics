@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   jenkins:
-    image: jenkins/jenkins:lts
+    build: .
     container_name: jenkins-server
     user: root
     ports:
@@ -16,3 +16,4 @@ services:
 
 volumes:
   jenkins_data:
+
