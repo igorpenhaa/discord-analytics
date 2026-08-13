@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: producer
-        image: igorpenha/discord-producer:v1.0.4
+        image:igorpenha/discord-producer:v1.0.7
         imagePullPolicy: IfNotPresent
         command: ["python", "producer/discord_bot.py"]
         envFrom:
@@ -56,7 +56,7 @@ spec:
     spec:
       containers:
       - name: processor
-        image: igorpenha/spark-processor:v1.0.4
+        image:igorpenha/spark-processor:v1.0.7
         imagePullPolicy: IfNotPresent
         envFrom:
         - configMapRef:
@@ -88,7 +88,7 @@ spec:
     spec:
       containers:
       - name: consumer
-        image: igorpenha/discord-producer:v1.0.4
+        image:igorpenha/discord-producer:v1.0.7
         imagePullPolicy: IfNotPresent
         command: ["python", "consumer/elastic_bridge.py"]
         envFrom:
