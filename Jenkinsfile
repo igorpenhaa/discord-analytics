@@ -55,9 +55,9 @@ pipeline {
 
                 // 'sed' para procurar a tag velha e trocar pela nova
                 sh """
-                    sed -i "s|image: ${DOCKER_USER}/discord-producer:.*|image:${DOCKER_USER}/discord-producer:${IMAGE_TAG}|g" k8s/apps-deployment.yaml
-                    sed -i "s|image: ${DOCKER_USER}/spark-processor:.*|image:${DOCKER_USER}/spark-processor:${IMAGE_TAG}|g" k8s/apps-deployment.yaml
-                    sed -i "s|image: ${DOCKER_USER}/elastic-consumer:.*|image:${DOCKER_USER}/elastic-consumer:${IMAGE_TAG}|g" k8s/apps-deployment.yaml
+                    sed -i "s|image: ${DOCKER_USER}/discord-producer:.*|image: ${DOCKER_USER}/discord-producer:${IMAGE_TAG}|g" k8s/apps-deployment.yaml
+                    sed -i "s|image: ${DOCKER_USER}/spark-processor:.*|image: ${DOCKER_USER}/spark-processor:${IMAGE_TAG}|g" k8s/apps-deployment.yaml
+                    sed -i "s|image: ${DOCKER_USER}/elastic-consumer:.*|image: ${DOCKER_USER}/elastic-consumer:${IMAGE_TAG}|g" k8s/apps-deployment.yaml
                 """
 
                 // Push da alteracao
