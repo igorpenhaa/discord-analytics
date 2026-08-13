@@ -10,3 +10,4 @@ data:
   ELASTICSEARCH_URL: "http://elasticsearch-service:9200"
   ELASTICSEARCH_INDEX: "palavras-discord"
   KIBANA_URL: "http://kibana-service:5601"
+  PYTHONPATH: "/app"
