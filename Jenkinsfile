@@ -43,6 +43,34 @@ pipeline {
             }
         }
 
+        stage('Atualização do Manifesto (GitOps)') {
+            steps {
+                echo "Atualizando a versão no repositório para a tag ${IMAGE_TAG}..."
+
+                // Identidade do Jenkins no Git
+                sh """
+                    git config --global user.email "jenkins@lab.local"
+                    git config --global user.name "Jenkins CI"
+                """
+
+                // 'sed' para procurar a tag velha e trocar pela nova
+                sh """
+                    sed -i "s|image: ${DOCKER_USER}/discord-producer:.*|image:${DOCKER_USER}/discord-producer:${IMAGE_TAG}|g" k8s/apps-deployment.yaml
+                    sed -i "s|image: ${DOCKER_USER}/spark-processor:.*|image:${DOCKER_USER}/spark-processor:${IMAGE_TAG}|g" k8s/apps-deployment.yaml
+                    sed -i "s|image: ${DOCKER_USER}/elastic-consumer:.*|image:${DOCKER_USER}/elastic-consumer:${IMAGE_TAG}|g" k8s/apps-deployment.yaml
+                """
+
+                // Push da alteracao
+                withCredentials([usernamePassword(credentialsId: 'github-credentials', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')]) {
+                    sh """
+                        git add k8s/apps-deployment.yaml
+                        git commit -m "ci: deploy automático da versão ${IMAGE_TAG} pelo Jenkins"
+                        git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/igorpenhaa/discord-analytics.git HEAD:main
+                    """
+                }
+            }
+        }
+
         stage('Limpeza do Agente') {
             steps {
                 echo "Removendo imagens locais..."
